@@ -1,0 +1,26 @@
+# Android
+*.apk
+*.aab
+*.ap_
+*.dex
+*.class
+bin/
+gen/
+out/
+build/
+.gradle/
+local.properties
+*.iml
+.idea/
+*.log
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Backup files
+*_backup_*
+*.bak
+version_history_backup/
+versions_backup/
+TTSManager.kt.bak
