@@ -70,5 +70,4 @@ dependencies {
 
     implementation(libs.security.crypto)
     implementation(libs.coroutines.android)
-    // compose.markdown removed — using self-implemented MarkdownText
 }

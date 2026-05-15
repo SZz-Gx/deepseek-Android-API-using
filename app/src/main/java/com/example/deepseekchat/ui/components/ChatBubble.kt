@@ -1,6 +1,8 @@
 package com.example.deepseekchat.ui.components
 
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -14,15 +16,23 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.ExpandLess
+import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.Psychology
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.example.deepseekchat.ui.theme.AiBubble
@@ -34,32 +44,38 @@ import com.example.deepseekchat.ui.theme.UserBubbleDark
 import com.example.deepseekchat.ui.theme.UserBubbleText
 import com.example.deepseekchat.ui.theme.UserBubbleTextDark
 
-// 聊天气泡组件：user 右对齐蓝色，assistant 左对齐灰色（含 Markdown），system 居中
-// 每个气泡底部有复制 / 删除 / 重发（仅 user 消息）图标按钮
-
 @Composable
 fun ChatBubble(
-    role: String,
-    content: String,
-    isDark: Boolean,
-    onCopy: () -> Unit,
-    onDelete: () -> Unit,
-    onResend: (() -> Unit)? = null
+    role: String, content: String, isDark: Boolean,
+    onCopy: () -> Unit, onDelete: () -> Unit, onResend: (() -> Unit)? = null,
+    isStreaming: Boolean = false
 ) {
     when (role) {
         "system" -> {
-            Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
-                Text(text = content, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(8.dp))
+            Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
+                Text(content, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(8.dp))
             }
         }
         else -> {
             val isUser = role == "user"
+            val hasReasoning = !isUser && content.startsWith("【思考】")
+            val reasoningText: String
+            val answerText: String
+            if (hasReasoning) {
+                val parts = content.split("\n【回答】\n", limit = 2)
+                reasoningText = parts[0].removePrefix("【思考】")
+                answerText = if (parts.size > 1) parts[1] else ""
+            } else {
+                reasoningText = ""
+                answerText = content
+            }
+
             Row(
-                modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 4.dp),
+                Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 4.dp),
                 horizontalArrangement = if (isUser) Arrangement.End else Arrangement.Start
             ) {
                 Box(
-                    modifier = Modifier
+                    Modifier
                         .weight(1f, fill = false)
                         .clip(RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp, bottomStart = if (isUser) 16.dp else 4.dp, bottomEnd = if (isUser) 4.dp else 16.dp))
                         .background(when { isUser && isDark -> UserBubbleDark; isUser -> UserBubble; !isUser && isDark -> AiBubbleDark; else -> AiBubble })
@@ -67,38 +83,46 @@ fun ChatBubble(
                 ) {
                     Column {
                         Text(
-                            text = if (isUser) "你" else "DeepSeek",
+                            if (isUser) "你" else "DeepSeek",
                             style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold,
                             color = when { isUser && isDark -> UserBubbleTextDark.copy(alpha = 0.7f); isUser -> UserBubbleText.copy(alpha = 0.7f); !isUser && isDark -> AiBubbleTextDark.copy(alpha = 0.7f); else -> AiBubbleText.copy(alpha = 0.7f) }
                         )
-                        if (isUser) {
-                            Text(text = content, style = MaterialTheme.typography.bodyMedium, color = if (isDark) UserBubbleTextDark else UserBubbleText)
-                        } else {
-                            MarkdownText(content = content, isDark = isDark)
+
+                        // 思考过程
+                        if (hasReasoning && reasoningText.isNotBlank()) {
+                            var expanded by remember { mutableStateOf(false) }
+                            Row(Modifier.fillMaxWidth().clickable { expanded = !expanded }.padding(vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+                                Icon(Icons.Default.Psychology, null, Modifier.size(16.dp), tint = if (isDark) AiBubbleTextDark.copy(alpha = 0.7f) else AiBubbleText.copy(alpha = 0.7f))
+                                Text(" 思考过程", style = MaterialTheme.typography.labelSmall, color = if (isDark) AiBubbleTextDark.copy(alpha = 0.7f) else AiBubbleText.copy(alpha = 0.7f))
+                                Spacer(Modifier.weight(1f))
+                                Icon(if (expanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore, null, Modifier.size(18.dp), tint = if (isDark) AiBubbleTextDark.copy(alpha = 0.5f) else AiBubbleText.copy(alpha = 0.5f))
+                            }
+                            AnimatedVisibility(visible = expanded) {
+                                Text(reasoningText, style = MaterialTheme.typography.bodySmall.copy(fontStyle = FontStyle.Italic), color = (if (isDark) AiBubbleTextDark else AiBubbleText).copy(alpha = 0.6f), modifier = Modifier.padding(bottom = 6.dp))
+                            }
                         }
-                        Row(
-                            modifier = Modifier.fillMaxWidth().padding(top = 6.dp),
-                            horizontalArrangement = Arrangement.End,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
+
+                        // 回答内容：流式中显示原文，结束后 Markdown 渲染
+                        if (isUser) {
+                            Text(answerText, style = MaterialTheme.typography.bodyMedium, color = if (isDark) UserBubbleTextDark else UserBubbleText)
+                        } else if (isStreaming) {
+                            Text(if (answerText.isBlank()) content else answerText, style = MaterialTheme.typography.bodyMedium, color = if (isDark) AiBubbleTextDark else AiBubbleText)
+                        } else {
+                            MarkdownText(if (answerText.isBlank()) content else answerText, isDark)
+                        }
+
+                        // 操作按钮（流式时不显示）
+                        if (!isStreaming) {
                             val iconTint = if (isUser && isDark) UserBubbleTextDark.copy(alpha = 0.45f)
                                 else if (isUser) UserBubbleText.copy(alpha = 0.45f)
                                 else if (isDark) AiBubbleTextDark.copy(alpha = 0.45f)
                                 else AiBubbleText.copy(alpha = 0.45f)
                             val iconSize = 16.dp
-
-                            IconButton(onClick = onCopy, modifier = Modifier.size(28.dp)) {
-                                Icon(Icons.Default.ContentCopy, "复制", tint = iconTint, modifier = Modifier.size(iconSize))
-                            }
-                            if (onResend != null) {
+                            Row(Modifier.fillMaxWidth().padding(top = 6.dp), horizontalArrangement = Arrangement.End, verticalAlignment = Alignment.CenterVertically) {
+                                IconButton(onClick = onCopy, modifier = Modifier.size(28.dp)) { Icon(Icons.Default.ContentCopy, "复制", tint = iconTint, modifier = Modifier.size(iconSize)) }
+                                if (onResend != null) { Spacer(Modifier.width(2.dp)); IconButton(onClick = onResend, modifier = Modifier.size(28.dp)) { Icon(Icons.Default.Refresh, "重发", tint = iconTint, modifier = Modifier.size(iconSize)) } }
                                 Spacer(Modifier.width(2.dp))
-                                IconButton(onClick = onResend, modifier = Modifier.size(28.dp)) {
-                                    Icon(Icons.Default.Refresh, "重发", tint = iconTint, modifier = Modifier.size(iconSize))
-                                }
-                            }
-                            Spacer(Modifier.width(2.dp))
-                            IconButton(onClick = onDelete, modifier = Modifier.size(28.dp)) {
-                                Icon(Icons.Default.Delete, "删除", tint = iconTint, modifier = Modifier.size(iconSize))
+                                IconButton(onClick = onDelete, modifier = Modifier.size(28.dp)) { Icon(Icons.Default.Delete, "删除", tint = iconTint, modifier = Modifier.size(iconSize)) }
                             }
                         }
                     }

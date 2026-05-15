@@ -37,7 +37,7 @@ fun SettingsScreen(
     onMaxContextRoundsChanged: (Int) -> Unit, onInputPriceMissChanged: (BigDecimal) -> Unit,
     onInputPriceHitChanged: (BigDecimal) -> Unit, onOutputPriceChanged: (BigDecimal) -> Unit,
     onNavigateBack: () -> Unit,
-    onNavigateToVersionHistory: (() -> Unit)? = null, onNavigateToApiConfigs: (() -> Unit)? = null,
+    onNavigateToApiConfigs: (() -> Unit)? = null,
     showApiConfigs: Boolean = false
 ) {
     val scope = rememberCoroutineScope()
@@ -75,7 +75,6 @@ fun SettingsScreen(
                 Spacer(Modifier.height(16.dp))
                 Card(Modifier.fillMaxWidth()) { Column(Modifier.padding(16.dp)) { Row(verticalAlignment = Alignment.CenterVertically) { Icon(Icons.Default.Wallpaper, null, Modifier.size(24.dp), tint = MaterialTheme.colorScheme.primary); Spacer(Modifier.width(8.dp)); Text("聊天背景", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold) }; Spacer(Modifier.height(8.dp)); Text("从相册选择图片作为聊天背景", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant); Spacer(Modifier.height(12.dp)); Row { OutlinedButton(onClick = { bgPickerLauncher.launch("image/*") }, modifier = Modifier.weight(1f)) { Icon(Icons.Default.Image, null, Modifier.size(18.dp)); Spacer(Modifier.width(4.dp)); Text("选择图片") }; Spacer(Modifier.width(8.dp)); OutlinedButton(onClick = { BackgroundStore.clearBackground(); scope.launch { snackbarHostState.showSnackbar("背景图已清除") } }, modifier = Modifier.weight(1f), enabled = BackgroundStore.isEnabled) { Text("清除背景") } } } }
                 Spacer(Modifier.height(16.dp))
-                if (onNavigateToVersionHistory != null) { Card(Modifier.fillMaxWidth()) { Row(Modifier.fillMaxWidth().padding(16.dp), verticalAlignment = Alignment.CenterVertically) { Icon(Icons.Default.History, null, Modifier.size(24.dp), tint = MaterialTheme.colorScheme.primary); Spacer(Modifier.weight(1f)); Text("版本历史", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold); Spacer(Modifier.weight(1f)); OutlinedButton(onClick = onNavigateToVersionHistory) { Text("查看 →") } } }; Spacer(Modifier.height(16.dp)) }
                 if (onNavigateToApiConfigs != null) { Card(Modifier.fillMaxWidth()) { Column(Modifier.padding(16.dp)) { Row(verticalAlignment = Alignment.CenterVertically) { Text("API 配置管理", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold); Spacer(Modifier.weight(1f)); OutlinedButton(onClick = onNavigateToApiConfigs) { Text("管理 →") } }; Spacer(Modifier.height(4.dp)); val a = ApiConfigStore.getActive(); if (a != null) Text("当前: ${a.name} (${a.model})", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant) } }; Spacer(Modifier.height(16.dp)) }
                 Button(onClick = { scope.launch { SecurePreferences.apiKey = apiKey; onModelChanged(model); onSystemPromptChanged(systemPrompt); onMaxContextRoundsChanged(maxContextRounds.toIntOrNull() ?: 20); onInputPriceMissChanged(inputPriceMiss.toBigDecimalOrNull() ?: BigDecimal.ONE); onInputPriceHitChanged(inputPriceHit.toBigDecimalOrNull() ?: BigDecimal("0.02")); onOutputPriceChanged(outputPrice.toBigDecimalOrNull() ?: BigDecimal("2")); snackbarHostState.showSnackbar("设置已保存") } }, Modifier.fillMaxWidth()) { Text("保存设置") }
                 Spacer(Modifier.height(12.dp))

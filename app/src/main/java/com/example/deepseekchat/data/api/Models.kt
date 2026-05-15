@@ -14,7 +14,7 @@ data class CompletionRequest(
     val messages: List<Message>,
     @Json(name = "stream") val stream: Boolean = false,
     val temperature: Double = 1.0,
-    @Json(name = "max_tokens") val maxTokens: Int = 4096
+    @Json(name = "max_tokens") val maxTokens: Int = 8192
 )
 
 @JsonClass(generateAdapter = true)
@@ -54,7 +54,8 @@ data class Usage(
 @JsonClass(generateAdapter = true)
 data class StreamDelta(
     val role: String? = null,
-    val content: String? = null
+    val content: String? = null,
+    @Json(name = "reasoning_content") val reasoningContent: String? = null
 )
 
 @JsonClass(generateAdapter = true)
@@ -74,6 +75,7 @@ data class StreamResponse(
 // ── 流式事件封装 ──────────────────────────────────────
 
 sealed class StreamChunk {
+    data class Reasoning(val text: String) : StreamChunk()
     data class Content(val text: String) : StreamChunk()
     data class Done(val usage: Usage) : StreamChunk()
     data class Error(val message: String) : StreamChunk()

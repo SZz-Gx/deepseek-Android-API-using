@@ -23,7 +23,8 @@ import kotlin.text.buildString
 public class StreamDeltaJsonAdapter(
   moshi: Moshi,
 ) : JsonAdapter<StreamDelta>() {
-  private val options: JsonReader.Options = JsonReader.Options.of("role", "content")
+  private val options: JsonReader.Options = JsonReader.Options.of("role", "content",
+      "reasoning_content")
 
   private val nullableStringAdapter: JsonAdapter<String?> = moshi.adapter(String::class.java,
       emptySet(), "role")
@@ -37,6 +38,7 @@ public class StreamDeltaJsonAdapter(
   public override fun fromJson(reader: JsonReader): StreamDelta {
     var role: String? = null
     var content: String? = null
+    var reasoningContent: String? = null
     var mask0 = -1
     reader.beginObject()
     while (reader.hasNext()) {
@@ -51,6 +53,11 @@ public class StreamDeltaJsonAdapter(
           // $mask = $mask and (1 shl 1).inv()
           mask0 = mask0 and 0xfffffffd.toInt()
         }
+        2 -> {
+          reasoningContent = nullableStringAdapter.fromJson(reader)
+          // $mask = $mask and (1 shl 2).inv()
+          mask0 = mask0 and 0xfffffffb.toInt()
+        }
         -1 -> {
           // Unknown name, skip it.
           reader.skipName()
@@ -59,22 +66,24 @@ public class StreamDeltaJsonAdapter(
       }
     }
     reader.endObject()
-    if (mask0 == 0xfffffffc.toInt()) {
+    if (mask0 == 0xfffffff8.toInt()) {
       // All parameters with defaults are set, invoke the constructor directly
       return  StreamDelta(
           role = role,
-          content = content
+          content = content,
+          reasoningContent = reasoningContent
       )
     } else {
       // Reflectively invoke the synthetic defaults constructor
       @Suppress("UNCHECKED_CAST")
       val localConstructor: Constructor<StreamDelta> = this.constructorRef ?:
           StreamDelta::class.java.getDeclaredConstructor(String::class.java, String::class.java,
-          Int::class.javaPrimitiveType, Util.DEFAULT_CONSTRUCTOR_MARKER).also {
+          String::class.java, Int::class.javaPrimitiveType, Util.DEFAULT_CONSTRUCTOR_MARKER).also {
           this.constructorRef = it }
       return localConstructor.newInstance(
           role,
           content,
+          reasoningContent,
           mask0,
           /* DefaultConstructorMarker */ null
       )
@@ -90,6 +99,8 @@ public class StreamDeltaJsonAdapter(
     nullableStringAdapter.toJson(writer, value_.role)
     writer.name("content")
     nullableStringAdapter.toJson(writer, value_.content)
+    writer.name("reasoning_content")
+    nullableStringAdapter.toJson(writer, value_.reasoningContent)
     writer.endObject()
   }
 }

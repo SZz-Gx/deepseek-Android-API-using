@@ -110,32 +110,25 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
             _messages.value = historyBeforeSend + userMessage + Message(role = "assistant", content = "")
             _isLoading.value = true
 
-            repository.sendMessageStream(model, systemPrompt, historyBeforeSend, trimmed, maxContextRounds)
-                .collect { chunk ->
-                    when (chunk) {
-                        is StreamChunk.Content -> {
-                            val msgs = _messages.value.toMutableList()
-                            val last = msgs.last()
-                            msgs[msgs.lastIndex] = last.copy(content = last.content + chunk.text)
-                            _messages.value = msgs
-                        }
-                        is StreamChunk.Done -> {
-                            val usage = chunk.usage
-                            _lastUsage.value = usage
-                            val cost = CostCalculator.calculate(usage, inputPriceMiss, inputPriceHit, outputPrice)
-                            _lastCost.value = cost
-                            BalanceManager.addCost(cost)
-                            ChatHistoryStore.saveMessages(currentSessionId, _messages.value)
-                            updateSessionTitle(isFirstMessage, trimmed)
-                            _isLoading.value = false
-                        }
-                        is StreamChunk.Error -> {
-                            _messages.value = historyBeforeSend
-                            _snackbar.emit(chunk.message)
-                            _isLoading.value = false
-                        }
-                    }
-                }
+            val result = repository.sendMessage(model, systemPrompt, historyBeforeSend, trimmed, maxContextRounds)
+            result.onSuccess { response ->
+                val reply = response.choices.firstOrNull()?.message?.content ?: ""
+                val msgs = _messages.value.toMutableList()
+                msgs[msgs.lastIndex] = Message(role = "assistant", content = reply)
+                _messages.value = msgs
+                val usage = response.usage
+                _lastUsage.value = usage
+                val cost = CostCalculator.calculate(usage, inputPriceMiss, inputPriceHit, outputPrice)
+                _lastCost.value = cost
+                BalanceManager.addCost(cost)
+                ChatHistoryStore.saveMessages(currentSessionId, _messages.value)
+                updateSessionTitle(isFirstMessage, trimmed)
+                _isLoading.value = false
+            }.onFailure { e ->
+                _messages.value = historyBeforeSend
+                _snackbar.emit(e.message ?: "请求失败")
+                _isLoading.value = false
+            }
         }
     }
 

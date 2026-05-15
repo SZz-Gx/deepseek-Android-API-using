@@ -8,6 +8,7 @@ import android.graphics.BitmapFactory
 import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.background
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -32,6 +33,7 @@ import androidx.compose.material.icons.filled.Api
 import androidx.compose.material.icons.filled.AttachFile
 import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.Clear
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Image
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Share
@@ -79,6 +81,8 @@ import kotlinx.coroutines.withContext
 import java.io.BufferedReader
 import java.io.InputStreamReader
 
+data class FileAttachment(val name: String, val content: String)
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ChatScreen(viewModel: ChatViewModel, onNavigateToSettings: () -> Unit) {
@@ -95,39 +99,31 @@ fun ChatScreen(viewModel: ChatViewModel, onNavigateToSettings: () -> Unit) {
     val scope = rememberCoroutineScope()
 
     var inputText by remember { mutableStateOf("") }
+    var attachment by remember { mutableStateOf<FileAttachment?>(null) }
     var showClearDialog by remember { mutableStateOf(false) }
     var showSessionPicker by remember { mutableStateOf(false) }
     var showApiPanel by remember { mutableStateOf(false) }
     var showImageUnsupported by remember { mutableStateOf(false) }
 
-    // 背景图
     var bgUri by remember { mutableStateOf(BackgroundStore.backgroundUri) }
     var bgEnabled by remember { mutableStateOf(BackgroundStore.isEnabled) }
     var bgBitmap by remember { mutableStateOf<android.graphics.Bitmap?>(null) }
 
     LaunchedEffect(bgUri, bgEnabled) {
         if (bgEnabled && bgUri.isNotBlank()) {
-            try {
-                val bmp = withContext(Dispatchers.IO) {
-                    val uri = Uri.parse(bgUri)
-                    context.contentResolver.openInputStream(uri)?.use { BitmapFactory.decodeStream(it) }
-                }
-                bgBitmap = bmp
-            } catch (_: Exception) { bgBitmap = null }
+            try { val bmp = withContext(Dispatchers.IO) { val uri = Uri.parse(bgUri); context.contentResolver.openInputStream(uri)?.use { BitmapFactory.decodeStream(it) } }; bgBitmap = bmp } catch (_: Exception) { bgBitmap = null }
         } else { bgBitmap = null }
     }
 
-    // 文件选择器
     val filePickerLauncher = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         if (uri == null) return@rememberLauncherForActivityResult
         scope.launch {
             try {
-                val text = withContext(Dispatchers.IO) {
-                    context.contentResolver.openInputStream(uri)?.use { BufferedReader(InputStreamReader(it)).readText() } ?: ""
-                }
+                val text = withContext(Dispatchers.IO) { context.contentResolver.openInputStream(uri)?.use { BufferedReader(InputStreamReader(it)).readText() } ?: "" }
                 if (text.isNotBlank()) {
-                    inputText = inputText.ifEmpty { "" } + text
-                    snackbarHostState.showSnackbar("已导入: ${getFileName(context, uri)}")
+                    val name = getFileName(context, uri)
+                    attachment = FileAttachment(name, text)
+                    snackbarHostState.showSnackbar("已附加: $name")
                 }
             } catch (e: Exception) { snackbarHostState.showSnackbar("读取失败: ${e.message}") }
         }
@@ -145,15 +141,14 @@ fun ChatScreen(viewModel: ChatViewModel, onNavigateToSettings: () -> Unit) {
             dismissButton = { TextButton(onClick = { showClearDialog = false }) { Text("取消") } })
     }
     if (showSessionPicker) {
-        SessionPicker(sessions = sessions, currentSessionId = viewModel.currentSessionIdProp,
+        SessionPicker(sessions, currentSessionId = viewModel.currentSessionIdProp,
             onSelect = { viewModel.switchToSession(it); showSessionPicker = false },
             onDelete = { viewModel.deleteSession(it) }, onNew = { viewModel.newSession(); showSessionPicker = false },
             onDismiss = { showSessionPicker = false })
     }
     if (showApiPanel) {
-        val configs = ApiConfigStore.getAll()
-        val activeId = ApiConfigStore.getActiveId()
-        ApiCallPanel(configs = configs, activeId = activeId,
+        val configs = ApiConfigStore.getAll(); val activeId = ApiConfigStore.getActiveId()
+        ApiCallPanel(configs, activeId,
             onSelect = { id -> ApiConfigStore.setActive(id); val a = ApiConfigStore.getActive(); if (a != null) { viewModel.model = a.model; viewModel.inputPriceMiss = a.inputPriceMiss.toBigDecimal(); viewModel.inputPriceHit = a.inputPriceHit.toBigDecimal(); viewModel.outputPrice = a.outputPrice.toBigDecimal() }; showApiPanel = false; scope.launch { snackbarHostState.showSnackbar("已切换") } },
             onAdd = { n, k, m -> ApiConfigStore.add(n, k, m); scope.launch { snackbarHostState.showSnackbar("已添加: $n") } },
             onDelete = { ApiConfigStore.delete(it); scope.launch { snackbarHostState.showSnackbar("已删除") } },
@@ -173,32 +168,48 @@ fun ChatScreen(viewModel: ChatViewModel, onNavigateToSettings: () -> Unit) {
             actions = {
                 IconButton(onClick = { showApiPanel = true }) { Icon(Icons.Default.Api, "API 调用板") }
                 IconButton(onClick = { showSessionPicker = true }) { Icon(Icons.AutoMirrored.Filled.FormatListBulleted, "会话列表") }
-                IconButton(onClick = {
-                    val md = viewModel.exportToMarkdown()
-                    context.startActivity(Intent.createChooser(Intent(Intent.ACTION_SEND).apply { type = "text/plain"; putExtra(Intent.EXTRA_TEXT, md); putExtra(Intent.EXTRA_SUBJECT, viewModel.currentSessionTitle) }, "导出对话"))
-                }) { Icon(Icons.Default.Share, "导出") }
+                IconButton(onClick = { val md = viewModel.exportToMarkdown(); context.startActivity(Intent.createChooser(Intent(Intent.ACTION_SEND).apply { type = "text/plain"; putExtra(Intent.EXTRA_TEXT, md); putExtra(Intent.EXTRA_SUBJECT, viewModel.currentSessionTitle) }, "导出对话")) }) { Icon(Icons.Default.Share, "导出") }
                 IconButton(onClick = { showClearDialog = true }) { Icon(Icons.Default.Clear, "清空对话") }
                 IconButton(onClick = onNavigateToSettings) { Icon(Icons.Default.Settings, "设置") }
             }) },
         bottomBar = {
             Column(Modifier.imePadding()) {
                 TokenUsageBar(usage = lastUsage, lastCost = lastCost, isDark = isDark)
+                // 附件标签
+                attachment?.let { att ->
+                    Row(
+                        Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 4.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(Icons.Default.AttachFile, null, Modifier.size(16.dp), tint = MaterialTheme.colorScheme.primary)
+                        Text(att.name, maxLines = 1, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary, modifier = Modifier.weight(1f).padding(horizontal = 6.dp))
+                        IconButton(onClick = { attachment = null }, modifier = Modifier.size(20.dp)) { Icon(Icons.Default.Close, "移除附件", Modifier.size(14.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant) }
+                    }
+                }
                 Row(Modifier.fillMaxWidth().navigationBarsPadding().padding(horizontal = 8.dp, vertical = 8.dp), verticalAlignment = Alignment.Bottom) {
                     IconButton(onClick = { showImageUnsupported = true }, modifier = Modifier.size(40.dp), enabled = !isLoading) { Icon(Icons.Default.Image, "图片", tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(24.dp)) }
                     IconButton(onClick = { filePickerLauncher.launch(arrayOf("text/*", "*/*")) }, modifier = Modifier.size(40.dp), enabled = !isLoading) { Icon(Icons.Default.AttachFile, "导入文件", tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(24.dp)) }
                     OutlinedTextField(value = inputText, onValueChange = { inputText = it }, modifier = Modifier.weight(1f), placeholder = { Text("输入消息…") }, maxLines = 4, shape = RoundedCornerShape(20.dp), enabled = !isLoading)
                     Spacer(Modifier.width(4.dp))
                     if (isLoading) CircularProgressIndicator(Modifier.size(48.dp).padding(8.dp), strokeWidth = 2.dp)
-                    else IconButton(onClick = { if (inputText.isNotBlank()) { viewModel.sendMessage(inputText); inputText = "" } }, modifier = Modifier.size(48.dp)) { Icon(Icons.AutoMirrored.Filled.Send, "发送", tint = MaterialTheme.colorScheme.primary) }
+                    else IconButton(onClick = {
+                        if (inputText.isNotBlank() || attachment != null) {
+                            val msg = if (attachment != null) {
+                                val att = attachment!!
+                                "【附件: ${att.name}】\n${att.content}\n---\n$inputText"
+                            } else inputText
+                            viewModel.sendMessage(msg)
+                            inputText = ""
+                            attachment = null
+                        }
+                    }, modifier = Modifier.size(48.dp)) { Icon(Icons.AutoMirrored.Filled.Send, "发送", tint = MaterialTheme.colorScheme.primary) }
                 }
             }
         }
     ) { paddingValues ->
         Box(Modifier.fillMaxSize()) {
             val bmp = bgBitmap
-            if (bmp != null && bgEnabled) {
-                androidx.compose.foundation.Image(painter = BitmapPainter(bmp.asImageBitmap()), contentDescription = null, modifier = Modifier.fillMaxSize(), contentScale = ContentScale.Crop, alpha = if (isDark) 0.25f else 0.12f)
-            }
+            if (bmp != null && bgEnabled) { androidx.compose.foundation.Image(painter = BitmapPainter(bmp.asImageBitmap()), contentDescription = null, modifier = Modifier.fillMaxSize(), contentScale = ContentScale.Crop, alpha = if (isDark) 0.25f else 0.12f) }
             if (messages.isEmpty() && !isLoading) {
                 Box(Modifier.fillMaxSize().padding(paddingValues), contentAlignment = Alignment.Center) {
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
@@ -214,14 +225,14 @@ fun ChatScreen(viewModel: ChatViewModel, onNavigateToSettings: () -> Unit) {
             } else {
                 LazyColumn(state = listState, modifier = Modifier.fillMaxSize().padding(paddingValues)) {
                     itemsIndexed(messages) { index, message ->
+                        val streaming = isLoading && index == messages.lastIndex && message.role == "assistant"
                         ChatBubble(role = message.role, content = message.content, isDark = isDark,
                             onCopy = { (context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager).setPrimaryClip(ClipData.newPlainText("message", message.content)) },
                             onDelete = { viewModel.deleteRound(index) },
-                            onResend = if (message.role == "user") { { viewModel.resendLast() } } else null)
+                            onResend = if (message.role == "user") { { viewModel.resendLast() } } else null,
+                            isStreaming = streaming)
                     }
-                    if (isLoading) {
-                        item { Box(Modifier.fillMaxWidth().padding(16.dp), contentAlignment = Alignment.Center) { Row(verticalAlignment = Alignment.CenterVertically) { CircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp); Spacer(Modifier.width(8.dp)); Text("DeepSeek 正在思考…", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant) } } }
-                    }
+                    if (isLoading) { item { Box(Modifier.fillMaxWidth().padding(16.dp), contentAlignment = Alignment.Center) { Row(verticalAlignment = Alignment.CenterVertically) { CircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp); Spacer(Modifier.width(8.dp)); Text("DeepSeek 正在思考…", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant) } } } }
                 }
             }
         }
