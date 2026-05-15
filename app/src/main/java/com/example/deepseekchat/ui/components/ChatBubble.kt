@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ContentCopy
+import androidx.compose.material.icons.filled.AttachFile
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.ExpandMore
@@ -34,6 +35,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.example.deepseekchat.ui.theme.AiBubble
 import com.example.deepseekchat.ui.theme.AiBubbleDark
@@ -102,13 +104,37 @@ fun ChatBubble(
                             }
                         }
 
-                        // 回答内容：流式中显示原文，结束后 Markdown 渲染
+                        // 附件展示（元宝风格文件卡片）
+                        val displayContent = if (isUser) answerText else if (answerText.isBlank()) content else answerText
+                        val attachFile = displayContent.substringAfter("【附件: ", "").substringBefore("\n")
+                        val attachPrefix = "【附件: $attachFile\n"
+                        val userOnlyText = if (displayContent.startsWith(attachPrefix)) {
+                            displayContent.substringAfter("\n---\n")
+                        } else displayContent
+
+                        if (attachFile.isNotBlank()) {
+                            Row(Modifier.fillMaxWidth().padding(bottom = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+                                androidx.compose.material3.Surface(
+                                    shape = RoundedCornerShape(8.dp),
+                                    color = if (isDark) androidx.compose.material3.MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f) else androidx.compose.material3.MaterialTheme.colorScheme.surfaceVariant,
+                                    modifier = Modifier.weight(1f)
+                                ) {
+                                    Row(Modifier.padding(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                                        Icon(Icons.Default.AttachFile, null, Modifier.size(20.dp), tint = MaterialTheme.colorScheme.primary)
+                                        Spacer(Modifier.width(8.dp))
+                                        Text(attachFile, maxLines = 1, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary)
+                                    }
+                                }
+                            }
+                        }
+
+                        // 回答内容
                         if (isUser) {
-                            Text(answerText, style = MaterialTheme.typography.bodyMedium, color = if (isDark) UserBubbleTextDark else UserBubbleText)
+                            Text(userOnlyText, style = MaterialTheme.typography.bodyMedium, color = if (isDark) UserBubbleTextDark else UserBubbleText)
                         } else if (isStreaming) {
-                            Text(if (answerText.isBlank()) content else answerText, style = MaterialTheme.typography.bodyMedium, color = if (isDark) AiBubbleTextDark else AiBubbleText)
+                            Text(userOnlyText, style = MaterialTheme.typography.bodyMedium, color = if (isDark) AiBubbleTextDark else AiBubbleText)
                         } else {
-                            MarkdownText(if (answerText.isBlank()) content else answerText, isDark)
+                            MarkdownText(userOnlyText, isDark)
                         }
 
                         // 操作按钮（流式时不显示）
